@@ -1,0 +1,15 @@
+{
+  "name": "business-outreach-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:db": "docker compose up -d",
+    "dev:server": "pnpm --filter business-outreach-server dev",
+    "dev:client": "pnpm --filter business-outreach-client dev",
+    "dev": "pnpm dev:db && pnpm wait-for-db && concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
+    "wait-for-db": "wait-on tcp:5432"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "wait-on": "^7.0.0"
+  }
+}

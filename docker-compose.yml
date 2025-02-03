@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: business_outreach_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypass
+      POSTGRES_DB: business_outreach
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
