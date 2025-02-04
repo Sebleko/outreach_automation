@@ -1,18 +1,18 @@
 import { AppDataSource } from "../data-source";
-import { SearchFlow } from "../entity/SearchFlow";
+import { Flow } from "../entity/Flow";
 import * as ScrapingService from "./scrapingService";
 
-export const getSearchFlows = async () => {
-  const flowRepo = AppDataSource.getRepository(SearchFlow);
+export const getFlows = async () => {
+  const flowRepo = AppDataSource.getRepository(Flow);
   return await flowRepo.find();
 };
 
-export const createSearchFlow = async (
+export const createFlow = async (
   name: string,
   filters: any,
   outreachTemplate: any
 ) => {
-  const flowRepo = AppDataSource.getRepository(SearchFlow);
+  const flowRepo = AppDataSource.getRepository(Flow);
 
   const newFlow = flowRepo.create({
     name,
@@ -21,8 +21,10 @@ export const createSearchFlow = async (
   });
 
   const id = (await flowRepo.save(newFlow)).id;
+  console.log("Created new search flow:", newFlow, id);
 
-  ScrapingService.scrapeBusinesses(id);
+  await ScrapingService.scrapeBusinesses(id);
+  console.log("ScrapingService done");
 
   return newFlow;
 };

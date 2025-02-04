@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-interface SearchFlow {
+interface Flow {
   id: number;
   name: string;
   filters: any;
   outreachTemplate: string;
 }
 
-const SearchFlowListPage: React.FC = () => {
-  const [flows, setFlows] = useState<SearchFlow[]>([]);
+const FlowListPage: React.FC = () => {
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [newFlowName, setNewFlowName] = useState("");
   const [newFlowTemplate, setNewFlowTemplate] = useState("");
 
@@ -24,7 +24,7 @@ const SearchFlowListPage: React.FC = () => {
   }, []);
 
   const fetchFlows = async () => {
-    const res = await fetch("/api/search-flows");
+    const res = await fetch("/api/flows");
     res
       .json()
       .then((data) => setFlows(data))
@@ -38,7 +38,7 @@ const SearchFlowListPage: React.FC = () => {
         filters: newFlowFilters,
         outreachTemplate: newFlowTemplate,
       };
-      const res = await fetch("/api/search-flows", {
+      const res = await fetch("/api/flows", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,4 +128,4 @@ const SearchFlowListPage: React.FC = () => {
   );
 };
 
-export default SearchFlowListPage;
+export default FlowListPage;

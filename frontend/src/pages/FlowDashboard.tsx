@@ -1,19 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { BusinessFlow } from "../../../shared/models";
 
-interface BusinessFlow {
-  id: number;
-  business: {
-    id: number;
-    name: string;
-    website: string;
-  };
-  status: string;
-  last_contacted: string;
-  response_status: string;
-}
-
-const SearchFlowDashboard: React.FC = () => {
+const FlowDashboard: React.FC = () => {
   const { flowId } = useParams();
   const [flowName, setFlowName] = useState("");
   const [businesses, setBusinesses] = useState<BusinessFlow[]>([]);
@@ -25,16 +14,17 @@ const SearchFlowDashboard: React.FC = () => {
 
   const fetchFlowDetails = async () => {
     if (!flowId) return;
-    const res = await fetch(`/api/search-flows/${flowId}`);
+    const res = await fetch(`/api/flows/${flowId}`);
     const data = await res.json();
     setFlowName(data.name);
   };
 
   const fetchBusinesses = async () => {
     if (!flowId) return;
-    // Example endpoint /api/search-flows/:id/businesses
-    const res = await fetch(`/api/search-flows/${flowId}/businesses`);
+    // Example endpoint /api/flows/:id/businesses
+    const res = await fetch(`/api/flows/${flowId}/businesses`);
     const data = await res.json();
+    console.log("Businesses in flow", data);
     setBusinesses(data);
   };
 
@@ -94,4 +84,4 @@ const SearchFlowDashboard: React.FC = () => {
   );
 };
 
-export default SearchFlowDashboard;
+export default FlowDashboard;

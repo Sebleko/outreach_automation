@@ -3,7 +3,7 @@ import { DataSource } from "typeorm";
 import { Business } from "./entity/Business";
 import { BusinessFlowMapping } from "./entity/BusinessFlowMapping";
 import { OutreachEmail } from "./entity/OutreachEmail";
-import { SearchFlow } from "./entity/SearchFlow";
+import { Flow } from "./entity/Flow";
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -14,7 +14,7 @@ export const AppDataSource = new DataSource({
   database: "business_outreach",
   synchronize: true,
   logging: false,
-  entities: [Business, BusinessFlowMapping, OutreachEmail, SearchFlow],
+  entities: [Business, BusinessFlowMapping, OutreachEmail, Flow],
   subscribers: [],
   migrations: [],
 });

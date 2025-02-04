@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, ManyToOne, Column } from "typeorm";
 import { Business } from "./Business";
-import { SearchFlow } from "./SearchFlow";
+import { Flow } from "./Flow";
 
 @Entity()
 export class BusinessFlowMapping {
@@ -10,8 +10,8 @@ export class BusinessFlowMapping {
   @ManyToOne(() => Business)
   business: Business;
 
-  @ManyToOne(() => SearchFlow)
-  searchFlow: SearchFlow;
+  @ManyToOne(() => Flow)
+  flow: Flow;
 
   // e.g. (pending, profiled, outreach_ready, outreach_sent, response_received)
   @Column({ nullable: true })

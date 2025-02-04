@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { Request, Response, NextFunction } from "express";
-import searchFlowRouter from "./routes/searchFlowRouter";
+import flowRouter from "./routes/flowRouter";
 import businessRouter from "./routes/businessRouter";
 import { config } from "dotenv";
 import { AppDataSource } from "./data-source";
@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 // Register routes
-app.use("/api/search-flows", searchFlowRouter);
+app.use("/api/flows", flowRouter);
 app.use("/api/businesses", businessRouter);
 
 // Example global error handler

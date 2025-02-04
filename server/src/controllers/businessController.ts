@@ -39,7 +39,6 @@ export const createBusiness = async (req: Request, res: Response) => {
       address,
       rating,
       review_count,
-      status,
     } = req.body;
 
     const businessRepo = AppDataSource.getRepository(Business);
@@ -52,7 +51,6 @@ export const createBusiness = async (req: Request, res: Response) => {
       address,
       rating,
       review_count,
-      status,
     });
     await businessRepo.save(newBusiness);
 

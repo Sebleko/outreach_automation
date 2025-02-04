@@ -1,18 +1,10 @@
 /**
  * scrapingService.ts
  *
- * A dummy service that "scrapes" (reads) business data from a local CSV file,
- * then persists the data into the database using TypeORM, creating
- * a mapping to the given SearchFlow.
- *
- * HOW TO USE:
- *
- *   import { scrapeBusinesses } from "./scrapingService";
- *
- *   async function run() {
- *     await dataSource.initialize();
- *     await scrapeBusinesses(flowId, dataSource, "dummy_data.csv");
- *   }
+ * A simpler service that:
+ * 1. Reads essential business data from CSV ("title", "category", etc.)
+ * 2. Persists to the DB using TypeORM
+ * 3. Creates a mapping to the given Flow
  */
 
 import { DataSource } from "typeorm";
@@ -22,25 +14,25 @@ import csvParser from "csv-parser";
 
 import { Business } from "../entity/Business";
 import { BusinessFlowMapping } from "../entity/BusinessFlowMapping";
-import { SearchFlow } from "../entity/SearchFlow";
+import { Flow } from "../entity/Flow";
 import { AppDataSource } from "../data-source";
 
 // --------------------------------------------------
-// 1. Define the shape of the data we expect from CSV
+// Define only the essential columns we want
 // --------------------------------------------------
 interface ScrapedBusiness {
-  name: string;
+  name: string; // from "title" in CSV
   category?: string;
+  address?: string;
+  phone?: string;
   website?: string;
   email?: string;
-  phone?: string;
-  address?: string;
   rating?: number;
   review_count?: number;
 }
 
 // --------------------------------------------------
-// 2. Read data from CSV (placeholder for real scraping)
+// CSV reading, extracting only essential fields
 // --------------------------------------------------
 async function readFromCSV(csvFilePath: string): Promise<ScrapedBusiness[]> {
   return new Promise((resolve, reject) => {
@@ -49,17 +41,32 @@ async function readFromCSV(csvFilePath: string): Promise<ScrapedBusiness[]> {
     createReadStream(csvFilePath)
       .pipe(csvParser())
       .on("data", (row: any) => {
-        console.log("Read row:", row);
-        // Adjust column names to match your CSV structure
+        // Log to see the row structure (optional)
+        //console.log("Read row:", row);
+
+        // Our CSV uses "title" for the business name
+        const name = row.title ?? "Unknown Name";
+
+        // We'll parse rating & review_count safely
+        const rating = row.review_rating
+          ? parseFloat(row.review_rating)
+          : undefined;
+        const review_count = row.review_count
+          ? parseInt(row.review_count, 10)
+          : undefined;
+
+        // If you have multiple emails in 'row.emails', decide how to handle them
+        const email = row.emails || ""; // or just store the raw string
+
         results.push({
-          name: row.name,
-          category: row.category,
-          website: row.website,
-          email: row.email,
-          phone: row.phone,
-          address: row.address,
-          rating: parseFloat(row.rating) || undefined,
-          review_count: parseInt(row.review_count, 10) || undefined,
+          name,
+          category: row.category ?? "",
+          address: row.address ?? "",
+          phone: row.phone ?? "",
+          website: row.website ?? "",
+          email,
+          rating,
+          review_count,
         });
       })
       .on("end", () => resolve(results))
@@ -68,51 +75,54 @@ async function readFromCSV(csvFilePath: string): Promise<ScrapedBusiness[]> {
 }
 
 // --------------------------------------------------
-// 3. Main function to "scrape" businesses for a flow
+// Main function: "scrape" businesses for a Flow
 // --------------------------------------------------
 /**
- * Scrapes businesses and links them to the specified flow.
- * - flowId: the ID of the SearchFlow entity
- * - dataSource: an initialized TypeORM DataSource
- * - csvFilePath: path to your dummy CSV file (default "dummy_data.csv")
+ * Scrapes businesses and links them to the specified Flow.
  *
- * Usage:
- *    await scrapeBusinesses(flow.id, dataSource);
+ * @param flowId       The ID of the Flow entity
+ * @param csvFilePath  Path to your CSV file (default "dummy_data.csv")
  */
-export async function scrapeBusinesses(flowId: number): Promise<void> {
+export async function scrapeBusinesses(
+  flowId: number,
+  csvFilePath: string = "dummy_data.csv"
+): Promise<void> {
   try {
-    // 1. Fetch the SearchFlow (to get any filters, name, etc. if needed)
-    const flowRepo = AppDataSource.getRepository(SearchFlow);
+    // 1. Fetch the Flow from DB
+    const flowRepo = AppDataSource.getRepository(Flow);
     const flow = await flowRepo.findOneBy({ id: flowId });
     if (!flow) {
-      throw new Error(`No SearchFlow found with ID ${flowId}`);
+      throw new Error(`No Flow found with ID ${flowId}`);
     }
+    console.log("Scraping businesses for flow:", flow);
 
-    // 2. Read data from CSV (this is our dummy "scraping" source)
-    const scrapedData = await readFromCSV(join(__dirname, "dummy_data.csv"));
+    // 2. Read data from CSV
+    const absolutePath = join(__dirname, csvFilePath);
+    const scrapedData = await readFromCSV(absolutePath);
 
-    // 3. Persist all data + create mappings in a single transaction
+    // 3. Persist data in a transaction
     await AppDataSource.transaction(async (manager) => {
-      for (const biz of scrapedData) {
-        // Create and save the Business
+      for (const bizData of scrapedData) {
+        //console.log("Inserting business:", bizData);
+        // Create a new Business entity
         const business = manager.create(Business, {
-          name: biz.name,
-          category: biz.category,
-          website: biz.website,
-          email: biz.email,
-          phone: biz.phone,
-          address: biz.address,
-          rating: biz.rating,
-          review_count: biz.review_count,
+          name: bizData.name,
+          category: bizData.category,
+          address: bizData.address,
+          phone: bizData.phone,
+          website: bizData.website,
+          email: bizData.email,
+          rating: bizData.rating,
+          review_count: bizData.review_count,
         });
 
         await manager.save(business);
 
-        // Create the link (BusinessFlowMapping) between Business & Flow
+        // Create the mapping between Business and Flow
         const mapping = manager.create(BusinessFlowMapping, {
           business,
-          searchFlow: flow,
-          status: "pending", // or any default status you'd like
+          flow, // or "Flow: flow" if your relation is named "Flow" in the entity
+          status: "pending",
         });
 
         await manager.save(mapping);
@@ -120,11 +130,10 @@ export async function scrapeBusinesses(flowId: number): Promise<void> {
     });
 
     console.log(
-      `Scraping (CSV read) successful for flow #${flowId}. Inserted ${scrapedData.length} businesses.`
+      `Scraping successful for flow #${flowId}. Inserted ${scrapedData.length} businesses.`
     );
   } catch (error) {
     console.error("Error scraping businesses:", error);
-    // Throw to signal that the operation failed
     throw error;
   }
 }

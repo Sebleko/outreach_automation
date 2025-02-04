@@ -1,6 +1,6 @@
 import { Routes, Route, Link } from "react-router-dom";
-import SearchFlowListPage from "./pages/SearchFlowListPage";
-import SearchFlowDashboard from "./pages/SearchFlowDashboard";
+import FlowListPage from "./pages/FlowListPage";
+import FlowDashboard from "./pages/FlowDashboard";
 import BusinessDetailPage from "./pages/BusinessDetailPage";
 
 function App() {
@@ -16,8 +16,8 @@ function App() {
 
       <div className="container mx-auto">
         <Routes>
-          <Route path="/" element={<SearchFlowListPage />} />
-          <Route path="/flows/:flowId" element={<SearchFlowDashboard />} />
+          <Route path="/" element={<FlowListPage />} />
+          <Route path="/flows/:flowId" element={<FlowDashboard />} />
           <Route
             path="/business/:businessId"
             element={<BusinessDetailPage />}

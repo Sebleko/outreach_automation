@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
 @Entity()
-export class SearchFlow {
+export class Flow {
   @PrimaryGeneratedColumn()
   id: number;
 
