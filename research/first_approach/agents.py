@@ -1,27 +1,26 @@
-# agents.py
-
 """
 This file defines the Agents used in the langgraph workflow. Each agent corresponds
 to one step in your original asynchronous process (e.g., generating queries, searching,
 fetching page content, judging usefulness, extracting context, deciding on more queries, final report).
-Adapt the exact LLM calls, SerpAPI usage, Jina usage, or other integrations to match your environment.
+This version uses LangChain’s community wrappers for LLM calls and consistently uses
+LangChain message objects for prompts.
 """
 
+import ast
 import json
-import requests  # or httpx, or any library you prefer
+import requests
 from termcolor import colored
 
-# You might store or load these from environment variables or a config file.
-OPENROUTER_API_KEY = "REDACTED"
-SERPAPI_API_KEY = "REDACTED"
-JINA_API_KEY = "REDACTED"
+# External configuration or environment variables
+#OPENAI_API_KEY = "REDACTED"
+#SERPAPI_API_KEY = "REDACTED"
+#JINA_API_KEY = "REDACTED"
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 SERPAPI_URL = "https://serpapi.com/search"
 JINA_BASE_URL = "https://r.jina.ai/"
-DEFAULT_MODEL = "anthropic/claude-3.5-haiku"
+DEFAULT_MODEL = "gpt-4o-mini"
 
-# Prompts
+# Prompts (from your prompts.py, assumed to be available)
 from prompts import (
     generate_search_queries_prompt,
     page_usefulness_prompt,
@@ -30,35 +29,34 @@ from prompts import (
     final_report_prompt
 )
 
-##################
-# Helper LLM call
-##################
+#############################
+# LangChain LLM configuration
+#############################
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import SystemMessage, HumanMessage, AIMessage
 
-def call_openrouter(messages, model=DEFAULT_MODEL):
-    """
-    Calls OpenRouter's chat completion endpoint with the provided messages.
-    Returns the content of the assistant's reply or None on error.
-    """
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "X-Title": "OpenDeepResearcher, by Matt Shumer",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model,
-        "messages": messages
-    }
+# Create a global LLM instance with LangChain
+llm = ChatOpenAI(
+    model_name=DEFAULT_MODEL,
+    openai_api_key=OPENAI_API_KEY,
+    temperature=0,
+)
 
+def call_llm(system_text: str, user_text: str) -> str:
+    """
+    Helper function that takes system text and user text, constructs LangChain
+    message objects, calls the LLM, and returns the LLM's response content.
+    """
+    messages = [
+        SystemMessage(content=system_text),
+        HumanMessage(content=user_text)
+    ]
     try:
-        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data['choices'][0]['message']['content']
-        else:
-            print(f"OpenRouter error: {resp.status_code}, {resp.text}")
+        response = llm(messages)
+        return response.content
     except Exception as e:
-        print("Error calling OpenRouter:", e)
-    return None
+        print("Error calling LLM via LangChain:", e)
+        return ""
 
 ###########################
 # Agents (one step each)
@@ -74,27 +72,26 @@ class GenerateSearchQueriesAgent:
     def invoke(self):
         user_query = self.state["user_query"]
         prompt = generate_search_queries_prompt.format(user_query=user_query)
-        messages = [
-            {"role": "system", "content": "You are a helpful and precise research assistant."},
-            {"role": "user", "content": prompt}
-        ]
-        response = call_openrouter(messages)
-        if response:
-            try:
-                # Expect exactly a Python list (e.g., "['query1', 'query2']")
-                search_queries = eval(response.strip())
-                if isinstance(search_queries, list):
-                    self.state["search_queries"] = search_queries
-                else:
-                    print("LLM did not return a list. Response:", response)
-                    self.state["search_queries"] = []
-            except Exception as e:
-                print("Error parsing search queries:", e, "\nResponse:", response)
-                self.state["search_queries"] = []
-        else:
-            self.state["search_queries"] = []
 
-        print(colored(f"GenerateSearchQueriesAgent => {self.state['search_queries']}", 'cyan'))
+        llm_response = call_llm(
+            system_text="You are a helpful and precise research assistant.",
+            user_text=prompt
+        )
+
+        search_queries = []
+        if llm_response:
+            try:
+                # Safely parse the returned string as a Python list.
+                parsed = ast.literal_eval(llm_response.strip())
+                if isinstance(parsed, list):
+                    search_queries = parsed
+                else:
+                    print("LLM did not return a list. Response:", llm_response)
+            except Exception as e:
+                print("Error parsing search queries:", e, "\nResponse:", llm_response)
+
+        self.state["search_queries"] = search_queries
+        print(colored(f"GenerateSearchQueriesAgent => {search_queries}", 'cyan'))
         return self.state
 
 
@@ -170,7 +167,7 @@ class FetchPageAgent:
 
 class UsefulnessAgent:
     """
-    For each link, call the LLM to see if it is relevant ("Yes") or not ("No").
+    For each link, ask the LLM if it is relevant ("Yes") or not ("No").
     Store the result in state["usefulness"] as { link: "Yes"|"No" }.
     """
     def __init__(self, state):
@@ -191,23 +188,21 @@ class UsefulnessAgent:
                 user_query=user_query,
                 page_content=truncated
             )
-            messages = [
-                {"role": "system", "content": "You are a strict and concise evaluator of research relevance."},
-                {"role": "user", "content": prompt}
-            ]
-            response = call_openrouter(messages)
-            if response:
-                answer = response.strip()
-                # Try to handle minor misformat
-                if answer not in ["Yes", "No"]:
-                    if "Yes" in answer:
-                        answer = "Yes"
-                    elif "No" in answer:
-                        answer = "No"
-                    else:
-                        answer = "No"
-            else:
-                answer = "No"
+
+            llm_response = call_llm(
+                system_text="You are a strict and concise evaluator of research relevance.",
+                user_text=prompt
+            )
+
+            answer = llm_response.strip()
+            # Normalize the answer
+            if answer not in ["Yes", "No"]:
+                if "Yes" in answer:
+                    answer = "Yes"
+                elif "No" in answer:
+                    answer = "No"
+                else:
+                    answer = "No"
 
             usefulness_map[link] = answer
 
@@ -218,7 +213,7 @@ class UsefulnessAgent:
 class ExtractContextAgent:
     """
     For each link that is "Yes", extract relevant context using the LLM.
-    Appends each extracted context to state["aggregated_contexts"].
+    Append each extracted context to state["aggregated_contexts"].
     """
     def __init__(self, state):
         self.state = state
@@ -235,21 +230,21 @@ class ExtractContextAgent:
                 content = page_texts.get(link, "")
                 if not content:
                     continue
+
                 truncated = content[:20000]
                 prompt = extract_context_prompt.format(
                     user_query=user_query,
                     search_query=query_used,
                     page_content=truncated
                 )
-                messages = [
-                    {"role": "system", "content": "You are an expert in extracting relevant information."},
-                    {"role": "user", "content": prompt}
-                ]
-                response = call_openrouter(messages)
-                if response:
-                    extracted_text = response.strip()
-                    if extracted_text:
-                        aggregated_contexts.append(extracted_text)
+
+                llm_response = call_llm(
+                    system_text="You are an expert in extracting relevant information.",
+                    user_text=prompt
+                )
+                extracted_text = llm_response.strip()
+                if extracted_text:
+                    aggregated_contexts.append(extracted_text)
 
         self.state["aggregated_contexts"] = aggregated_contexts
         return self.state
@@ -267,8 +262,9 @@ class CheckIfMoreSearchNeededAgent:
         user_query = self.state["user_query"]
         all_contexts = self.state.get("aggregated_contexts", [])
         all_search_queries = self.state.get("all_search_queries", [])
-        # The newly used queries are in self.state["search_queries"]. Merge them:
-        for q in self.state["search_queries"]:
+
+        # Merge the newly used queries into all_search_queries
+        for q in self.state.get("search_queries", []):
             if q not in all_search_queries:
                 all_search_queries.append(q)
 
@@ -278,26 +274,26 @@ class CheckIfMoreSearchNeededAgent:
             all_contexts="\n".join(all_contexts)
         )
 
-        messages = [
-            {"role": "system", "content": "You are a systematic research planner."},
-            {"role": "user", "content": prompt}
-        ]
-        response = call_openrouter(messages)
+        llm_response = call_llm(
+            system_text="You are a systematic research planner.",
+            user_text=prompt
+        )
+
         new_queries = []
-        if response is not None:
-            cleaned = response.strip()
+        if llm_response:
+            cleaned = llm_response.strip()
             if cleaned:
                 try:
-                    new_queries = eval(cleaned)
-                    if not isinstance(new_queries, list):
-                        new_queries = []
+                    parsed = ast.literal_eval(cleaned)
+                    if isinstance(parsed, list):
+                        new_queries = parsed
                 except Exception as e:
                     print("Error parsing new search queries:", e, "\nResponse:", cleaned)
 
         # Update the state
         self.state["all_search_queries"] = all_search_queries
         self.state["search_queries"] = new_queries
-        self.state["continue_research"] = bool(new_queries)  # True if we got more queries
+        self.state["continue_research"] = bool(new_queries)
 
         return self.state
 
@@ -316,12 +312,12 @@ class FinalReportAgent:
             user_query=user_query,
             all_contexts="\n".join(all_contexts)
         )
-        messages = [
-            {"role": "system", "content": "You are a skilled report writer."},
-            {"role": "user", "content": prompt}
-        ]
-        response = call_openrouter(messages)
-        final_report = response if response else "No report generated."
+
+        llm_response = call_llm(
+            system_text="You are a skilled report writer.",
+            user_text=prompt
+        )
+        final_report = llm_response if llm_response else "No report generated."
         self.state["final_report"] = final_report
 
         print(colored("==== FINAL REPORT ====", 'green'))

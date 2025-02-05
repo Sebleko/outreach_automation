@@ -19,6 +19,10 @@ function App() {
           <Route path="/" element={<FlowListPage />} />
           <Route path="/flows/:flowId" element={<FlowDashboard />} />
           <Route
+            path="/flows/:flowId/:businessId"
+            element={<BusinessDetailPage />}
+          />
+          <Route
             path="/business/:businessId"
             element={<BusinessDetailPage />}
           />

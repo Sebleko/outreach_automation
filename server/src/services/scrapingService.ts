@@ -13,7 +13,10 @@ import { join } from "path";
 import csvParser from "csv-parser";
 
 import { Business } from "../entity/Business";
-import { BusinessFlowMapping } from "../entity/BusinessFlowMapping";
+import {
+  BusinessFlowMapping,
+  BusinessFlowStatus,
+} from "../entity/BusinessFlowMapping";
 import { Flow } from "../entity/Flow";
 import { AppDataSource } from "../data-source";
 
@@ -122,7 +125,7 @@ export async function scrapeBusinesses(
         const mapping = manager.create(BusinessFlowMapping, {
           business,
           flow, // or "Flow: flow" if your relation is named "Flow" in the entity
-          status: "pending",
+          status: BusinessFlowStatus.READY,
         });
 
         await manager.save(mapping);

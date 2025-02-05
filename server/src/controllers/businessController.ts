@@ -1,12 +1,29 @@
 import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Business } from "../entity/Business";
+import { Business as SharedBusiness } from "../../../shared/models";
 
 export const getAllBusinesses = async (req: Request, res: Response) => {
   try {
     const businessRepo = AppDataSource.getRepository(Business);
     const businesses = await businessRepo.find();
-    res.json(businesses);
+
+    // Convert to shared model
+    const sharedBusinesses = businesses.map((b) => {
+      const sharedBusiness: SharedBusiness = {
+        id: b.id,
+        name: b.name,
+        website: b.website,
+        category: b.category,
+        email: b.email,
+        phone: b.phone,
+        address: b.address,
+        rating: b.rating,
+        review_count: b.review_count,
+      };
+      return sharedBusiness;
+    });
+    res.json(sharedBusinesses);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

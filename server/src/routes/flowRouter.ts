@@ -21,6 +21,10 @@ router.get("/:id", FlowController.getFlowById);
  */
 router.get("/:id/businesses", FlowController.getBusinessFlows);
 
+/** /api/flows/:flowId/:businessId
+ * Control how a business is handled in a flow.
+ */
+
 /**
  * POST /api/flows
  * Create a new search flow

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { BusinessFlow } from "../../../shared/models";
 
 const FlowDashboard: React.FC = () => {
@@ -59,6 +59,12 @@ const FlowDashboard: React.FC = () => {
               <td className="p-2">{bf.status}</td>
               <td className="p-2">{bf.last_contacted || "Never"}</td>
               <td className="p-2">
+                <Link
+                  to={`/flows/${flowId}/${bf.id}`}
+                  className="bg-blue-500 text-white px-2 py-1 mr-2 rounded"
+                >
+                  View
+                </Link>
                 {bf.status === "profiled" && (
                   <button
                     className="bg-green-600 text-white px-2 py-1 rounded mr-2"

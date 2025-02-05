@@ -23,49 +23,41 @@ from agents import (
 def create_research_graph():
     graph = StateGraph(AgentGraphState)
 
-    # Node: GenerateSearchQueries
     graph.add_node(
         "generate_search_queries",
         lambda state: GenerateSearchQueriesAgent(state).invoke()
     )
 
-    # Node: Search
     graph.add_node(
         "search",
         lambda state: SearchAgent(state).invoke()
     )
 
-    # Node: FetchPage
     graph.add_node(
         "fetch_page",
         lambda state: FetchPageAgent(state).invoke()
     )
 
-    # Node: Usefulness
     graph.add_node(
         "usefulness",
         lambda state: UsefulnessAgent(state).invoke()
     )
 
-    # Node: ExtractContext
     graph.add_node(
         "extract_context",
         lambda state: ExtractContextAgent(state).invoke()
     )
 
-    # Node: CheckIfMoreSearchNeeded
     graph.add_node(
         "check_if_more",
         lambda state: CheckIfMoreSearchNeededAgent(state).invoke()
     )
 
-    # Node: FinalReport
     graph.add_node(
         "final_report",
         lambda state: FinalReportAgent(state).invoke()
     )
 
-    # Node: End
     graph.add_node(
         "end",
         lambda state: EndNodeAgent(state).invoke()
