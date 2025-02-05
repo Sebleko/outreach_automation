@@ -26,5 +26,9 @@ export const createFlow = async (
   await ScrapingService.scrapeBusinesses(id);
   console.log("ScrapingService done");
 
+  // Next, trigger the processing of the first job.
+  // First let us not concider the orchestration of the jobs
+  // Just process the first business fully in one swoop.
+
   return newFlow;
 };
