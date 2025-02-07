@@ -1,337 +1,262 @@
 """
 This file defines the Agents used in the langgraph workflow. Each agent corresponds
-to one step in your original asynchronous process (e.g., generating queries, searching,
-fetching page content, judging usefulness, extracting context, deciding on more queries, final report).
-This version uses LangChain’s community wrappers for LLM calls and consistently uses
-LangChain message objects for prompts.
+to one step in the business prospecting process (e.g., interpreting exploration results,
+generating queries, selecting search results, extracting information, and refining the final report).
+It uses LangChain's community wrappers and Pydantic schemas for structured output.
 """
 
-import ast
-import json
 import requests
+import requests_cache
+from datetime import timedelta
 from termcolor import colored
 
-# External configuration or environment variables
-#OPENAI_API_KEY = "REDACTED"
-#SERPAPI_API_KEY = "REDACTED"
-#JINA_API_KEY = "REDACTED"
+# Install caching to optimize repeated requests
+requests_cache.install_cache('cache', backend='sqlite', expire_after=timedelta(days=7))
 
-SERPAPI_URL = "https://serpapi.com/search"
-JINA_BASE_URL = "https://r.jina.ai/"
-DEFAULT_MODEL = "gpt-4o-mini"
+# External API keys (replace with your actual keys)
+SERPAPI_KEY = "YOUR_SERPAPI_KEY"
+JINA_API_KEY = "YOUR_JINA_API_KEY"
 
-# Prompts (from your prompts.py, assumed to be available)
+# Import prompts and schemas
 from prompts import (
-    generate_search_queries_prompt,
-    page_usefulness_prompt,
-    extract_context_prompt,
-    more_search_queries_prompt,
-    final_report_prompt
+    interpretation_agent_prompt,
+    strategy_agent_prompt,
+    query_generation_agent_prompt,
+    select_search_results_prompt,
+    extract_info_prompt,
+    finalization_agent_prompt
 )
 
-#############################
-# LangChain LLM configuration
-#############################
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
-
-# Create a global LLM instance with LangChain
-llm = ChatOpenAI(
-    model_name=DEFAULT_MODEL,
-    openai_api_key=OPENAI_API_KEY,
-    temperature=0,
+from schemas import (
+    InterpretationOutput,
+    StrategyOutput,
+    QueryGenerationOutput,
+    SelectedSearchResults,
+    ExtractedInfo,
+    FinalReportOutput
 )
 
-def call_llm(system_text: str, user_text: str) -> str:
+# LangChain components
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+
+# Configure LangChain LLM
+llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+
+def call_llm(prompt_template, input_data, schema):
     """
-    Helper function that takes system text and user text, constructs LangChain
-    message objects, calls the LLM, and returns the LLM's response content.
+    Calls the LLM with a prompt and parses the output using the specified Pydantic schema.
     """
-    messages = [
-        SystemMessage(content=system_text),
-        HumanMessage(content=user_text)
-    ]
-    try:
-        response = llm(messages)
-        return response.content
-    except Exception as e:
-        print("Error calling LLM via LangChain:", e)
-        return ""
+    parser = JsonOutputParser(pydantic_object=schema)
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=list(input_data.keys()),
+        partial_variables={"format_instructions": parser.get_format_instructions()}
+    )
+    chain = prompt | llm | parser
+    return chain.invoke(input_data)
 
 ###########################
-# Agents (one step each)
+# Agents (Defined for Each Step)
 ###########################
 
-class GenerateSearchQueriesAgent:
+class InterpretationAgent:
     """
-    Ask the LLM to produce up to four precise search queries (in a Python list format).
+    Interprets exploration results and updates the prospect engagement report draft.
     """
     def __init__(self, state):
         self.state = state
 
     def invoke(self):
-        user_query = self.state["user_query"]
-        prompt = generate_search_queries_prompt.format(user_query=user_query)
+        input_data = {
+            "seller_profile": self.state["seller_profile"],
+            "business_info": self.state["business_info"],
+            "report_draft": self.state.get("report_draft", ""),
+            "exploration_results": self.state.get("exploration_results", "")
+        }
 
-        llm_response = call_llm(
-            system_text="You are a helpful and precise research assistant.",
-            user_text=prompt
-        )
+        response = call_llm(interpretation_agent_prompt, input_data, InterpretationOutput)
+        self.state["report_draft"] = response.report_draft
 
-        search_queries = []
-        if llm_response:
-            try:
-                # Safely parse the returned string as a Python list.
-                parsed = ast.literal_eval(llm_response.strip())
-                if isinstance(parsed, list):
-                    search_queries = parsed
-                else:
-                    print("LLM did not return a list. Response:", llm_response)
-            except Exception as e:
-                print("Error parsing search queries:", e, "\nResponse:", llm_response)
-
-        self.state["search_queries"] = search_queries
-        print(colored(f"GenerateSearchQueriesAgent => {search_queries}", 'cyan'))
+        print(colored("Report draft updated with exploration results.", 'cyan'))
         return self.state
 
 
-class SearchAgent:
+class StrategyAgent:
     """
-    Perform a Google search for each query using SERPAPI.
-    Aggregates all unique links into state["links"] as a dict: { link: producing_query }.
+    Analyzes the report and scratchpad to decide if further research is needed.
+    Updates the scratchpad and outputs research questions if necessary.
     """
     def __init__(self, state):
         self.state = state
 
     def invoke(self):
-        all_queries = self.state.get("search_queries", [])
-        unique_links = {}
+        input_data = {
+            "seller_profile": self.state["seller_profile"],
+            "business_info": self.state["business_info"],
+            "report_draft": self.state["report_draft"],
+            "scratchpad": self.state.get("scratchpad", "")
+        }
 
-        for query in all_queries:
-            params = {
-                "q": query,
-                "api_key": SERPAPI_API_KEY,
-                "engine": "google"
+        response = call_llm(strategy_agent_prompt, input_data, StrategyOutput)
+        self.state["scratchpad"] = response.scratchpad
+        self.state["research_questions"] = response.research_questions
+
+        if not response.research_questions:
+            print(colored("No further research required.", 'green'))
+        else:
+            print(colored(f"Research questions generated: {response.research_questions}", 'cyan'))
+
+        return self.state
+
+
+class QueryGenerationAgent:
+    """
+    Generates Google search queries and a search context for each research question.
+    """
+    def __init__(self, state):
+        self.state = state
+
+    def invoke(self):
+        queries_contexts = []
+
+        for question in self.state["research_questions"]:
+            input_data = {
+                "seller_profile": self.state["seller_profile"],
+                "business_info": self.state["business_info"],
+                "report_draft": self.state["report_draft"],
+                "scratchpad": self.state["scratchpad"],
+                "research_question": question
             }
-            try:
-                resp = requests.get(SERPAPI_URL, params=params, timeout=60)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if "organic_results" in data:
-                        for item in data["organic_results"]:
-                            link = item.get("link")
-                            if link and link not in unique_links:
-                                unique_links[link] = query
-                    else:
-                        print("No organic results in SERPAPI response.")
-                else:
-                    print(f"SERPAPI error: {resp.status_code} - {resp.text}")
-            except Exception as e:
-                print("Error performing SERPAPI search:", e)
 
-        self.state["links"] = unique_links
-        print(colored(f"SearchAgent => Found {len(unique_links)} unique links", 'cyan'))
+            response = call_llm(query_generation_agent_prompt, input_data, QueryGenerationOutput)
+            queries_contexts.append({
+                "research_question": question,
+                "search_queries": response.search_queries,
+                "search_context": response.search_context
+            })
+
+        self.state["queries_contexts"] = queries_contexts
+        print(colored(f"Generated search queries for research questions.", 'cyan'))
+        return self.state
+
+
+class SelectSearchResultsAgent:
+    """
+    Performs Google searches using SERPAPI and selects promising results.
+    """
+    def __init__(self, state):
+        self.state = state
+
+    def invoke(self):
+        selected_results = []
+
+        for query_context in self.state["queries_contexts"]:
+            search_results = []
+            for query in query_context["search_queries"]:
+                params = {
+                    "q": query,
+                    "api_key": SERPAPI_KEY,
+                    "engine": "google"
+                }
+                try:
+                    response = requests.get("https://serpapi.com/search", params=params, timeout=30)
+                    response.raise_for_status()
+                    data = response.json()
+                    search_results.extend(data.get("organic_results", []))
+                except Exception as e:
+                    print(f"Error performing SERPAPI search for '{query}':", e)
+
+            input_data = {
+                "research_question": query_context["research_question"],
+                "search_context": query_context["search_context"],
+                "search_results": search_results
+            }
+
+            response = call_llm(select_search_results_prompt, input_data, SelectedSearchResults)
+            selected_results.extend(response.selected_results)
+
+        self.state["selected_results"] = selected_results
         return self.state
 
 
 class FetchPageAgent:
     """
-    Fetch the text content of each link using Jina, store the result in state["page_texts"] as { link: text }.
+    Fetches webpage content using Jina.
     """
     def __init__(self, state):
         self.state = state
 
     def invoke(self):
-        links_dict = self.state.get("links", {})
-        page_texts = {}
-
-        for link in links_dict.keys():
-            full_url = f"{JINA_BASE_URL}{link}"
-            headers = {
-                "Authorization": f"Bearer {JINA_API_KEY}"
-            }
+        page_contents = {}
+        for url in self.state.get("selected_results", []):
+            headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
             try:
-                resp = requests.get(full_url, headers=headers, timeout=60)
-                if resp.status_code == 200:
-                    page_texts[link] = resp.text
+                response = requests.get(f"https://r.jina.ai/{url}", headers=headers, timeout=30)
+                if response.status_code == 200:
+                    page_contents[url] = response.text
                 else:
-                    print(f"Jina fetch error for {link}: {resp.status_code} - {resp.text}")
-                    page_texts[link] = ""
+                    page_contents[url] = ""
             except Exception as e:
-                print(f"Error fetching webpage text with Jina for {link}:", e)
-                page_texts[link] = ""
+                print(f"Error fetching page {url} using Jina:", e)
+                page_contents[url] = ""
 
-        self.state["page_texts"] = page_texts
+        self.state["page_contents"] = page_contents
         return self.state
 
 
-class UsefulnessAgent:
+class ExtractInfoAgent:
     """
-    For each link, ask the LLM if it is relevant ("Yes") or not ("No").
-    Store the result in state["usefulness"] as { link: "Yes"|"No" }.
+    Extracts relevant information from the fetched pages using the LLM.
     """
     def __init__(self, state):
         self.state = state
 
     def invoke(self):
-        user_query = self.state["user_query"]
-        page_texts = self.state.get("page_texts", {})
-        usefulness_map = {}
+        extracted_info = []
 
-        for link, content in page_texts.items():
+        for url, content in self.state.get("page_contents", {}).items():
             if not content:
-                usefulness_map[link] = "No"
                 continue
 
-            truncated = content[:20000]
-            prompt = page_usefulness_prompt.format(
-                user_query=user_query,
-                page_content=truncated
-            )
+            input_data = {
+                "seller_profile": self.state["seller_profile"],
+                "business_info": self.state["business_info"],
+                "research_question": self.state["queries_contexts"][0]["research_question"],
+                "search_context": self.state["queries_contexts"][0]["search_context"],
+                "known_info": "\n".join(self.state.get("known_info", [])),
+                "page_content": content
+            }
 
-            llm_response = call_llm(
-                system_text="You are a strict and concise evaluator of research relevance.",
-                user_text=prompt
-            )
+            response = call_llm(extract_info_prompt, input_data, ExtractedInfo)
+            extracted_info.extend(response.relevant_info)
+            self.state["known_info"].extend(response.relevant_info)
 
-            answer = llm_response.strip()
-            # Normalize the answer
-            if answer not in ["Yes", "No"]:
-                if "Yes" in answer:
-                    answer = "Yes"
-                elif "No" in answer:
-                    answer = "No"
-                else:
-                    answer = "No"
+            if response.conflicts:
+                self.state["scratchpad"] += "\nConflicts:\n" + "\n".join(response.conflicts)
 
-            usefulness_map[link] = answer
-
-        self.state["usefulness"] = usefulness_map
+        print(colored(f"Extracted info from {len(extracted_info)} items.", 'cyan'))
         return self.state
 
 
-class ExtractContextAgent:
+class FinalizationAgent:
     """
-    For each link that is "Yes", extract relevant context using the LLM.
-    Append each extracted context to state["aggregated_contexts"].
+    Refines and finalizes the prospect engagement report when research is complete.
     """
     def __init__(self, state):
         self.state = state
 
     def invoke(self):
-        user_query = self.state["user_query"]
-        links_dict = self.state.get("links", {})
-        page_texts = self.state.get("page_texts", {})
-        usefulness_map = self.state.get("usefulness", {})
-        aggregated_contexts = self.state.get("aggregated_contexts", [])
+        input_data = {
+            "seller_profile": self.state["seller_profile"],
+            "business_info": self.state["business_info"],
+            "report_draft": self.state["report_draft"],
+            "scratchpad": self.state.get("scratchpad", "")
+        }
 
-        for link, query_used in links_dict.items():
-            if usefulness_map.get(link) == "Yes":
-                content = page_texts.get(link, "")
-                if not content:
-                    continue
+        response = call_llm(finalization_agent_prompt, input_data, FinalReportOutput)
+        self.state["final_report"] = response.final_report
 
-                truncated = content[:20000]
-                prompt = extract_context_prompt.format(
-                    user_query=user_query,
-                    search_query=query_used,
-                    page_content=truncated
-                )
-
-                llm_response = call_llm(
-                    system_text="You are an expert in extracting relevant information.",
-                    user_text=prompt
-                )
-                extracted_text = llm_response.strip()
-                if extracted_text:
-                    aggregated_contexts.append(extracted_text)
-
-        self.state["aggregated_contexts"] = aggregated_contexts
-        return self.state
-
-
-class CheckIfMoreSearchNeededAgent:
-    """
-    Ask the LLM if more searches are needed. If so, store them in state["search_queries"] and loop again.
-    If no more searches are needed, store an empty list (or skip).
-    """
-    def __init__(self, state):
-        self.state = state
-
-    def invoke(self):
-        user_query = self.state["user_query"]
-        all_contexts = self.state.get("aggregated_contexts", [])
-        all_search_queries = self.state.get("all_search_queries", [])
-
-        # Merge the newly used queries into all_search_queries
-        for q in self.state.get("search_queries", []):
-            if q not in all_search_queries:
-                all_search_queries.append(q)
-
-        prompt = more_search_queries_prompt.format(
-            user_query=user_query,
-            previous_search_queries=all_search_queries,
-            all_contexts="\n".join(all_contexts)
-        )
-
-        llm_response = call_llm(
-            system_text="You are a systematic research planner.",
-            user_text=prompt
-        )
-
-        new_queries = []
-        if llm_response:
-            cleaned = llm_response.strip()
-            if cleaned:
-                try:
-                    parsed = ast.literal_eval(cleaned)
-                    if isinstance(parsed, list):
-                        new_queries = parsed
-                except Exception as e:
-                    print("Error parsing new search queries:", e, "\nResponse:", cleaned)
-
-        # Update the state
-        self.state["all_search_queries"] = all_search_queries
-        self.state["search_queries"] = new_queries
-        self.state["continue_research"] = bool(new_queries)
-
-        return self.state
-
-
-class FinalReportAgent:
-    """
-    Generates the final report from all accumulated contexts.
-    """
-    def __init__(self, state):
-        self.state = state
-
-    def invoke(self):
-        user_query = self.state["user_query"]
-        all_contexts = self.state.get("aggregated_contexts", [])
-        prompt = final_report_prompt.format(
-            user_query=user_query,
-            all_contexts="\n".join(all_contexts)
-        )
-
-        llm_response = call_llm(
-            system_text="You are a skilled report writer.",
-            user_text=prompt
-        )
-        final_report = llm_response if llm_response else "No report generated."
-        self.state["final_report"] = final_report
-
-        print(colored("==== FINAL REPORT ====", 'green'))
-        print(colored(final_report, 'green'))
-        return self.state
-
-
-class EndNodeAgent:
-    """
-    Graph end. Just a pass-through or final display.
-    """
-    def __init__(self, state):
-        self.state = state
-
-    def invoke(self):
-        print(colored("End of research flow.", 'magenta'))
+        print(colored("Final report refined and ready.", 'green'))
         return self.state
