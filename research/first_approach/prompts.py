@@ -1,3 +1,4 @@
+# prompts.py
 """
 Prompts for the report-driven business prospecting pipeline.
 
@@ -52,9 +53,9 @@ This report helps create highly personalized outreach emails aimed at engaging p
 """
 
 
-# Strategy Agent Prompt:
+# Planner Agent Prompt:
 # Identifies gaps and decides whether further research is needed.
-strategy_agent_prompt = """
+planner_agent_prompt = """
 You are an expert research strategist refining a **Prospect Engagement Report** to ensure it is thorough and strategically focused.
 
 **Seller Profile:**
@@ -97,8 +98,9 @@ You are an expert research strategist refining a **Prospect Engagement Report** 
 
 # Query Generation Agent Prompt:
 # Generates Google search queries and search context for each research question.
+# Updated Query Generation Agent Prompt:
 query_generation_agent_prompt = """
-You are an expert research assistant tasked with generating precise search queries for business prospecting.
+You are an expert research assistant tasked with generating precise queries for business prospecting.
 
 **Seller Profile:**
 {seller_profile}
@@ -116,17 +118,24 @@ You are an expert research assistant tasked with generating precise search queri
 {research_question}
 
 **Instructions:**
-1. **Generate up to 4 distinct, precise Google search queries** to answer the research question:
-   - Use **specific keywords** from the report, scratchpad, and research question.
-   - Ensure queries cover **diverse angles** (e.g., recent developments, competitor comparisons, industry insights).
-   - Avoid redundant or overly broad queries.
+1. **Generate up to 2 distinct, precise queries** to answer the research question. These queries can be:
+   - **Google Search Queries**: Use specific keywords from the report, scratchpad, and research question.
+     - Cover diverse angles (e.g., recent developments, competitor comparisons, industry insights).
+     - Avoid redundant or overly broad queries.
+   - **Direct URLs**: If you believe browsing a specific website (such as the target company's website) will directly help answer the research question, provide a **full URL**.
+     - **URLs must start with 'http'** (e.g., `https://www.example.com/about-us`).
+     - Only include URLs that are highly relevant to the research question.
 
 2. **Create a focused search context** to guide future information extraction:
    - Include only **the most critical facts** from the report draft and scratchpad.
    - Highlight **specific terms** or **phrases** that should be present in relevant search results.
-   - Keep the search context concise (no more than 3 sentences).
+   - Keep the search context concise (no more than 10 sentences).
 
-Ensure the search queries are targeted and actionable. The search context should help quickly identify whether a result is relevant.
+**Important:**  
+- Queries that start with **'http'** will be interpreted as direct URLs to browse.  
+- Queries that do **not** start with 'http' will be treated as **Google search queries**.
+
+Ensure the queries are targeted and actionable. The search context should help quickly identify whether a result is relevant.
 
 {format_instructions}
 """
@@ -206,7 +215,7 @@ You are a critical evaluator for business prospecting.
 **Search Context:**
 {search_context}
 
-**Webpage Content (truncated):**
+**Webpage Content (truncated around search engine result text):**
 {page_content}
 
 **Instructions:**

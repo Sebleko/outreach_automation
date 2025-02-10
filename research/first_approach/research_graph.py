@@ -1,94 +1,106 @@
-"""
-This file constructs the langgraph StateGraph for the research flow.
-It wires together the interpretation, strategy, query generation, search selection,
-information extraction, and finalization agents, including iterative loops.
-"""
-
 from langgraph.graph import StateGraph
-from state import AgentGraphState
-
+from state import ProspectingAgentState
 from agents import (
+    PlannerAgent,
     InterpretationAgent,
-    StrategyAgent,
     QueryGenerationAgent,
     SelectSearchResultsAgent,
-    FetchPageAgent,
     ExtractInfoAgent,
     FinalizationAgent
 )
 
 def create_research_graph():
-    graph = StateGraph(AgentGraphState)
+    graph = StateGraph(ProspectingAgentState)
 
-    # Step 1: Interpret exploration results and update report
-    graph.add_node("interpretation", lambda state: InterpretationAgent(state).invoke())
+    # 1) Add the Planner node (replaces Strategy as the first step)
+    graph.add_node("planner", lambda s: PlannerAgent(s).invoke())
 
-    # Step 2: Analyze the report and determine if further research is needed
-    graph.add_node("strategy", lambda state: StrategyAgent(state).invoke())
+    # 2) Interpretation node
+    graph.add_node("interpretation", lambda s: InterpretationAgent(s).invoke())
 
-    # Step 3: Generate search queries if further research is needed
-    graph.add_node("query_generation", lambda state: QueryGenerationAgent(state).invoke())
+    # 3) Standard research steps
+    graph.add_node("query_generation", lambda s: QueryGenerationAgent(s).invoke())
+    graph.add_node("select_search_results", lambda s: SelectSearchResultsAgent(s).invoke())
+    graph.add_node("extract_info", lambda s: ExtractInfoAgent(s).invoke())
 
-    # Step 4: Perform search and select promising results
-    graph.add_node("select_search_results", lambda state: SelectSearchResultsAgent(state).invoke())
+    # 4) Finalization
+    graph.add_node("finalization", lambda s: FinalizationAgent(s).invoke())
 
-    # Step 5: Fetch webpage content
-    graph.add_node("fetch_page", lambda state: FetchPageAgent(state).invoke())
+    # -------------------------
+    # Define the edges (flow)
+    # -------------------------
+    # Start with Planner
+    graph.set_entry_point("planner")
 
-    # Step 6: Extract relevant information
-    graph.add_node("extract_info", lambda state: ExtractInfoAgent(state).invoke())
-
-    # Step 7: Finalize the report
-    graph.add_node("finalization", lambda state: FinalizationAgent(state).invoke())
-
-    ############################
-    # Define the transitions (flow)
-    ############################
-
-    # Start with interpretation
-    graph.set_entry_point("interpretation")
-
-    # Move from interpretation to strategy
-    graph.add_edge("interpretation", "strategy")
-
-    # Based on strategy, decide whether to continue research or finalize the report
-    def research_decision(state):
-        if state.get("research_questions"):
+    # After Interpretation, conditionally decide next step
+    def round_check(state):
+        """
+        If there are research questions and we haven't reached the max number of rounds,
+        continue with query generation. Otherwise, proceed to finalization.
+        """
+        state["round_count"] += 1
+        if state.get("research_questions") and state["round_count"] < state["max_rounds"]:
+            return "planner"
+        else:
+            return "finalization"
+        
+    def ready_check(state):
+        """
+        If there are no more research questions, we can proceed to finalization.
+        Else we need to continue with query generation.
+        """
+        research_questions = state.get("research_questions")
+        if research_questions and len(research_questions) > 0:
             return "query_generation"
         else:
             return "finalization"
 
-    graph.add_conditional_edges("strategy", research_decision)
+    graph.add_conditional_edges("interpretation", round_check)
+    graph.add_conditional_edges("planner", ready_check)
 
-    # Continue research: Generate queries, select results, fetch pages, extract info, and loop back to interpretation
+    # Research loop: queries -> select -> extract -> re-interpret
     graph.add_edge("query_generation", "select_search_results")
-    graph.add_edge("select_search_results", "fetch_page")
-    graph.add_edge("fetch_page", "extract_info")
+    graph.add_edge("select_search_results", "extract_info")
+    # After extracting info, we go back to interpretation and recheck the rounds
     graph.add_edge("extract_info", "interpretation")
 
-    # Finalize the report when research is complete
+    # Finalization when research rounds are complete or no research questions remain
     graph.add_edge("finalization", "end")
     graph.set_finish_point("end")
 
+    # Optional: log node execution if a flag is set in state
+    def on_node_start(state, node_name):
+        if state.get("log_steps"):
+            print(f"[LOG] Running node: {node_name}")
+
+    graph.on_node_start = on_node_start
+
     return graph
 
-
-def compile_workflow():
+def compile_graph():
     graph = create_research_graph()
     return graph.compile()
 
-
 if __name__ == "__main__":
-    # Example workflow execution
-    workflow = compile_workflow()
+    workflow = compile_graph()
 
     initial_state = {
         "seller_profile": "We offer AI-driven marketing automation solutions.",
-        "business_info": {"business_name": "Acme Corp", "website": "https://www.acmecorp.com"},
+        "business_info": {
+            "business_name": "Acme Corp",
+            "website": "https://www.acmecorp.com"
+        },
         "report_draft": "",
         "scratchpad": "",
-        "known_info": []
+        "known_info": [],
+        "log_steps": True,        # Enable logging of graph steps
+        "max_rounds": 3,
+        "round_count": 0,
     }
 
     final_state = workflow.run(initial_state)
-    print("Workflow complete. Final report:", final_state.get("final_report"))
+
+    # Summarize results
+    print("\n--- Workflow Complete ---")
+    print("Final report:\n", final_state.get("final_report"))
+    print(f"Research rounds completed: {final_state.get('round_count', 0)} / {final_state.get('max_rounds', 0)}")

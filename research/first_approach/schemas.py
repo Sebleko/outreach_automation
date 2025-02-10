@@ -1,3 +1,5 @@
+# schemas.py
+
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -17,14 +19,15 @@ class InterpretationOutput(BaseModel):
 # 2) Strategy Agent Schema
 ################################################################################
 
-class StrategyOutput(BaseModel):
+class PlannerOutput(BaseModel):
     scratchpad: str = Field(
         description="Updated scratchpad containing hypotheses, unresolved questions, conflicts, and next steps. "
                     "If no further research is needed, the scratchpad should justify this decision."
     )
     research_questions: List[str] = Field(
         description="A list of up to 2 research questions to guide further exploration. "
-                    "If no additional research is needed, this list will be empty."
+                    "If no additional research is needed, this list will be empty.",
+        max_length=2,
     )
 
 
@@ -34,7 +37,11 @@ class StrategyOutput(BaseModel):
 
 class QueryGenerationOutput(BaseModel):
     search_queries: List[str] = Field(
-        description="A list of up to 4 distinct, precise Google search queries to address the research question."
+        description="A list of up to 2 distinct queries to address the research question. "
+                    "Queries can be either:\n"
+                    "- **Google Search Queries**: Phrases or keywords for Google search.\n"
+                    "- **Direct URLs**: Full URLs (starting with 'http') if browsing a specific website is necessary.",
+        max_length=2,
     )
     search_context: str = Field(
         description="A concise context derived from the report draft and scratchpad, guiding the evaluation of search results. "
@@ -48,7 +55,8 @@ class QueryGenerationOutput(BaseModel):
 
 class SelectedSearchResults(BaseModel):
     selected_results: List[str] = Field(
-        description="A list of up to 4 URLs selected from Google search results that are most likely to provide relevant information for answering the research question."
+        description="A list of up to 2 URLs selected from Google search results that are most likely to provide relevant information for answering the research question.",
+        max_length=2,
     )
 
 
