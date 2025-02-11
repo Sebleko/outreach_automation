@@ -7,6 +7,7 @@ such as Jina or Firecrawl.
 
 from getpass import getpass
 import os
+import aiohttp
 import requests
 from dotenv import load_dotenv
 
@@ -31,45 +32,46 @@ else:
     FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
     
 
-def fetch_with_jina(url):
-    """
-    Fetch webpage content using Jina's service. 
-    Returns the text content or empty string on failure.
-    """
-    headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
-    try:
-        response = requests.get(f"https://r.jina.ai/{url}", headers=headers, timeout=30)
-        if response.status_code == 200:
-            return response.text
-        else:
-            print(f"Jina returned status {response.status_code} for URL: {url}")
+    async def fetch_with_jina(url):
+        """
+        Fetch webpage content using Jina's service. 
+        Returns the text content or empty string on failure.
+        """
+        headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
+        try:
+            async with aiohttp.CachedSession() as session:
+                async with session.get(f"https://r.jina.ai/{url}", headers=headers, timeout=30) as response:
+                    if response.status == 200:
+                        return await response.text()
+                    else:
+                        print(f"Jina returned status {response.status} for URL: {url}")
+                        return ""
+        except Exception as e:
+            print(f"Error fetching page {url} using Jina: {e}")
             return ""
-    except Exception as e:
-        print(f"Error fetching page {url} using Jina: {e}")
-        return ""
 
 
-def fetch_with_firecrawl(url):
-    """
-    Fetch webpage content using Firecrawl's service.
-    Returns the text content or empty string on failure.
-    """
-    headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}"}
-    try:
-        # Example URL or endpoint. Adapt to Firecrawl’s actual endpoint.
-        response = requests.get(f"https://api.firecrawl.com/fetch?url={url}", 
-                                headers=headers, timeout=30)
-        if response.status_code == 200:
-            return response.text
-        else:
-            print(f"Firecrawl returned status {response.status_code} for URL: {url}")
+    async def fetch_with_firecrawl(url):
+        """
+        Fetch webpage content using Firecrawl's service.
+        Returns the text content or empty string on failure.
+        """
+        headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}"}
+        try:
+            async with aiohttp.CachedSession() as session:
+                async with session.get(f"https://api.firecrawl.com/fetch?url={url}", 
+                                    headers=headers, timeout=30) as response:
+                    if response.status == 200:
+                        return await response.text()
+                    else:
+                        print(f"Firecrawl returned status {response.status} for URL: {url}")
+                        return ""
+        except Exception as e:
+            print(f"Error fetching page {url} using Firecrawl: {e}")
             return ""
-    except Exception as e:
-        print(f"Error fetching page {url} using Firecrawl: {e}")
-        return ""
 
 
-def fetch_page(url):
+async def fetch_page(url):
     """
     Main abstraction function that calls the appropriate backend
     based on the FETCH_BACKEND setting at the top of this file.

@@ -7,7 +7,7 @@ Google's Custom Search JSON API.
 
 from getpass import getpass
 import os
-import requests
+import aiohttp
 from dotenv import load_dotenv
 
 def _getpass(env_var: str):
@@ -30,7 +30,7 @@ GOOGLE_SEARCH_KEY = os.getenv("GOOGLE_SEARCH_KEY")
 GOOGLE_SEARCH_CX = os.getenv("GOOGLE_SEARCH_CX")
 
 
-def search_with_serpapi(query):
+async def search_with_serpapi(query):
     """
     Perform a search query using SerpAPI.
     Returns a list of 'organic_results' items (dicts).
@@ -41,16 +41,17 @@ def search_with_serpapi(query):
             "api_key": SERPAPI_API_KEY,
             "engine": "google"
         }
-        response = requests.get("https://serpapi.com/search", params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("organic_results", [])
+        async with aiohttp.CachedSession() as session:
+            async with session.get("https://serpapi.com/search", params=params, timeout=30) as response:
+                response.raise_for_status()
+                data = await response.json()
+                return data.get("organic_results", [])
     except Exception as e:
         print(f"Error performing SerpAPI search for '{query}': {e}")
         return []
 
 
-def search_with_google_custom(query):
+async def search_with_google_custom(query):
     """
     Perform a search query using Google's Custom Search JSON API.
     Returns a standardized list of search result items (dicts).
@@ -63,20 +64,21 @@ def search_with_google_custom(query):
             "cx": GOOGLE_SEARCH_CX,
             "q": query,
         }
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        async with aiohttp.CachedSession() as session:
+            async with session.get(url, params=params, timeout=30) as response:
+                response.raise_for_status()
+                data = await response.json()
 
-        # Typically, Google Custom Search items are found under "items"
-        items = data.get("items", [])
-        # Return or reformat them as needed to match the same "dict" structure
-        return items
+                # Typically, Google Custom Search items are found under "items"
+                items = data.get("items", [])
+                # Return or reformat them as needed to match the same "dict" structure
+                return items
     except Exception as e:
         print(f"Error performing Google Custom Search for '{query}': {e}")
         return []
 
 
-def search(query, backend="GOOGLE"):
+async def search(query, backend="GOOGLE"):
     """
     Main abstraction function that calls the appropriate backend
     based on the SEARCH_BACKEND setting at the top of this file.

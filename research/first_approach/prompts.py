@@ -246,9 +246,6 @@ You are an expert information extractor.
 **Search Context:**
 {search_context}
 
-**Previously Known Info:**
-{known_info}
-
 **Webpage Content (full):**
 {page_content}
 

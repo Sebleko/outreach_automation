@@ -3,9 +3,37 @@ from typing import List, Dict, Optional, Annotated
 from typing_extensions import TypedDict, NotRequired
 from langgraph.graph.message import add_messages
 
+class URLWithContext(TypedDict):
+    research_question: str
+    search_urls: List[str]
+    search_context: str
 
-class QueryWithContext(TypedDict):
-    pass
+
+def add_urls_with_context(existing: list[URLWithContext], update: list[URLWithContext] | str):
+    """
+    Sometimes the query generator returns queries and urls at the same time.
+    In this case we need to treat the urls and queries separately. Urls are ready
+    to be explored but we need to find promising search results for queries first.
+    We wait that we have gotten the urls for every query and finally recombine them
+    with the initial urls.
+    """
+    if update == "DELETE":
+        return []
+    
+    grouped = {}
+    for item in (existing or []) + update:
+        if item['research_question'] in grouped:
+            grouped[item['research_question']]['search_urls'].extend(item['search_urls'])
+        else:
+            grouped[item['research_question']] = item.copy()
+
+    return list(grouped.values())
+
+def extend_with_delete(existing: list, update: list | str):
+    if update == "DELETE":
+        return []
+    return (existing or []) + update
+
 
 class ProspectingAgentState(TypedDict, total=False):
     """
@@ -13,10 +41,6 @@ class ProspectingAgentState(TypedDict, total=False):
     for generating a Prospect Engagement Report.
 
     Fields:
-        messages (List): Conversation history messages. Integrated with LangGraph's message system.
-        name (str): The name of the target person or business.
-        birthday (str): The birthday of the target person or business foundation date.
-        
         seller_profile (str): A description of what the seller offers.
         business_info (Dict): Basic info about the target business (e.g., name, website).
         report_draft (str): The evolving draft of the Prospect Engagement Report.
@@ -24,9 +48,6 @@ class ProspectingAgentState(TypedDict, total=False):
         
         research_questions (List[str]): Up to 2 research questions that guide further exploration.
         queries_contexts (List[Dict]): Search queries and contextual information for each question.
-        selected_results (List[str]): URLs selected as promising from Google search results.
-        page_contents (Dict[str, str]): Maps URLs to fetched webpage content.
-        known_info (List[str]): Bullet points of relevant information extracted so far.
         exploration_results (str): Summarized extracted information to be interpreted in the next step.
         final_report (str): The final refined version of the prospect engagement report.
 
@@ -40,29 +61,18 @@ class ProspectingAgentState(TypedDict, total=False):
         max_page_fetches (int): Maximum allowed pages to fetch.
     """
 
-    # Required fields
-    messages: Annotated[List, add_messages]
-    name: str
-    birthday: str
 
     # Prospecting fields (optional with defaults)
     seller_profile: NotRequired[str]
     business_info: NotRequired[Dict]
+
     report_draft: NotRequired[str]
     scratchpad: NotRequired[str]
 
-    research_questions: NotRequired[List[str]]
+    research_questions: Annotated[List[str], extend_with_delete]
+    queries_with_context: Annotated[List[Dict], extend_with_delete]
+    urls_with_context: Annotated[List[Dict], add_urls_with_context]
 
-    queries_contexts: NotRequired[List[Dict]]
-
-    ready_for_fetching: Annotated[List[Dict], add]
-
-
-
-    selected_results: NotRequired[List[str]]
-
-    page_contents: NotRequired[Dict[str, str]]
-    known_info: NotRequired[List[str]]
     exploration_results: NotRequired[str]
     final_report: NotRequired[str]
 
@@ -78,8 +88,6 @@ class ProspectingAgentState(TypedDict, total=False):
 
 # Factory function to initialize default values
 def create_default_state(
-    name: str,
-    birthday: str,
     seller_profile: Optional[str] = "",
     business_info: Optional[Dict] = None
 ) -> ProspectingAgentState:
@@ -97,17 +105,12 @@ def create_default_state(
     """
     return {
         "messages": [],
-        "name": name,
-        "birthday": birthday,
         "seller_profile": seller_profile,
         "business_info": business_info if business_info else {},
         "report_draft": "",
         "scratchpad": "",
         "research_questions": [],
         "queries_contexts": [],
-        "selected_results": [],
-        "page_contents": {},
-        "known_info": [],
         "exploration_results": "",
         "final_report": "",
 

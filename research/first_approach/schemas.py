@@ -55,8 +55,8 @@ class QueryGenerationOutput(BaseModel):
 
 class SelectedSearchResults(BaseModel):
     selected_results: List[str] = Field(
-        description="A list of up to 2 URLs selected from Google search results that are most likely to provide relevant information for answering the research question.",
-        max_length=2,
+        description="A list of up to 4 URLs selected from Google search results that are most likely to provide relevant information for answering the research question.",
+        max_length=4,
     )
 
 
