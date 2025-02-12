@@ -1,20 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, ManyToOne, Column } from "typeorm";
 import { Business } from "./Business";
 import { Flow } from "./Flow";
-
-// Enum for different statuses.
-export enum BusinessFlowStatus {
-  READY = "ready",
-  REPORT_WAITING_FOR_APPROVAL = "report_waiting_for_approval",
-  REPORT_APPROVED = "report_approved",
-  OUTREACH_WAITING_FOR_APPROVAL = "outreach_waiting_for_approval",
-  OUTREACH_APPROVED = "outreach_approved",
-  OUTREACH_SENT = "outreach_sent",
-  RESPONSE_RECEIVED = "response_received",
-}
+import { PathStatus } from "../../../shared/models";
 
 @Entity()
-export class BusinessFlowMapping {
+export class BusinessPathEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -36,9 +26,8 @@ export class BusinessFlowMapping {
   @Column("boolean", { default: false })
   outreach_mail_approved: boolean = false;
 
-  // e.g. (, profiled, outreach_ready, outreach_sent, response_received)
   @Column({ nullable: true })
-  status: BusinessFlowStatus;
+  status: PathStatus;
 
   @Column({ type: "timestamp", nullable: true })
   last_contacted: Date;

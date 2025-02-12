@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Business } from "./entity/Business";
-import { BusinessFlowMapping } from "./entity/BusinessFlowMapping";
+import { BusinessPathEntity } from "./entity/BusinessPath";
 import { OutreachEmail } from "./entity/OutreachEmail";
 import { Flow } from "./entity/Flow";
 
@@ -14,7 +14,7 @@ export const AppDataSource = new DataSource({
   database: "business_outreach",
   synchronize: true,
   logging: false,
-  entities: [Business, BusinessFlowMapping, OutreachEmail, Flow],
+  entities: [Business, BusinessPathEntity, OutreachEmail, Flow],
   subscribers: [],
   migrations: [],
 });

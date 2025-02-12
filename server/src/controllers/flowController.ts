@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import * as FlowService from "../services/flowService";
 import { AppDataSource } from "../data-source";
 import { Flow } from "../entity/Flow";
-import { BusinessFlowMapping } from "../entity/BusinessFlowMapping";
-import { BusinessFlow } from "../../../shared/models";
+import { BusinessPathEntity } from "../entity/BusinessPath";
+import { BusinessPath } from "../../../shared/models";
 
 export const getAllFlows = async (req: Request, res: Response) => {
   try {
@@ -30,14 +30,14 @@ export const createFlow = async (req: Request, res: Response) => {
   }
 };
 
-export const getBusinessFlows = async (req: Request, res: Response) => {
+export const getBusinessPaths = async (req: Request, res: Response) => {
   try {
     const { id } = req.params; // Flow ID in the URL
     const flowId = parseInt(id, 10);
 
-    // 1. Fetch all rows in BusinessFlowMapping with this Flow ID.
+    // 1. Fetch all rows in BusinessPath with this Flow ID.
     //    We use the "relations" property so TypeORM also retrieves the "business" entity.
-    const mappingRepo = AppDataSource.getRepository(BusinessFlowMapping);
+    const mappingRepo = AppDataSource.getRepository(BusinessPathEntity);
     const mappings = await mappingRepo.find({
       where: {
         flow: { id: flowId }, // Using the ManyToOne relation
@@ -58,7 +58,7 @@ export const getBusinessFlows = async (req: Request, res: Response) => {
           status: m.status,
           last_contacted: m.last_contacted?.toString(),
           response_status: m.response_status,
-        } as BusinessFlow)
+        } as BusinessPath)
     );
 
     // 3. Return the businesses

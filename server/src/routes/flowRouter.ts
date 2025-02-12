@@ -19,7 +19,7 @@ router.get("/:id", FlowController.getFlowById);
  * GET /api/flows/:id/businesses
  * Get all businesses in a flow
  */
-router.get("/:id/businesses", FlowController.getBusinessFlows);
+router.get("/:id/businesses", FlowController.getBusinessPaths);
 
 /** /api/flows/:flowId/:businessId
  * Control how a business is handled in a flow.

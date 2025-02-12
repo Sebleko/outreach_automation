@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import { Request, Response, NextFunction } from "express";
 import flowRouter from "./routes/flowRouter";
 import businessRouter from "./routes/businessRouter";
 import { config } from "dotenv";
@@ -20,6 +19,7 @@ app.use("/api/businesses", businessRouter);
 
 // Example global error handler
 app.use((err, req, res, next) => {
+  console.log("Global error handler", err);
   if (res.headersSent) {
     return next(err);
   }

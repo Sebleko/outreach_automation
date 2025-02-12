@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { BusinessFlow } from "../../../shared/models";
+import { BusinessPath } from "../../../shared/models";
 
 const FlowDashboard: React.FC = () => {
   const { flowId } = useParams();
   const [flowName, setFlowName] = useState("");
-  const [businesses, setBusinesses] = useState<BusinessFlow[]>([]);
+  const [businesses, setBusinesses] = useState<BusinessPath[]>([]);
 
   useEffect(() => {
     fetchFlowDetails();

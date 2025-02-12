@@ -7,16 +7,13 @@
  * 3. Creates a mapping to the given Flow
  */
 
-import { DataSource } from "typeorm";
 import { createReadStream } from "fs";
 import { join } from "path";
 import csvParser from "csv-parser";
 
 import { Business } from "../entity/Business";
-import {
-  BusinessFlowMapping,
-  BusinessFlowStatus,
-} from "../entity/BusinessFlowMapping";
+import { BusinessPathEntity } from "../entity/BusinessPath";
+import { PathStatus } from "../../../shared/models";
 import { Flow } from "../entity/Flow";
 import { AppDataSource } from "../data-source";
 
@@ -122,10 +119,10 @@ export async function scrapeBusinesses(
         await manager.save(business);
 
         // Create the mapping between Business and Flow
-        const mapping = manager.create(BusinessFlowMapping, {
+        const mapping = manager.create(BusinessPathEntity, {
           business,
           flow, // or "Flow: flow" if your relation is named "Flow" in the entity
-          status: BusinessFlowStatus.READY,
+          status: PathStatus.Pending,
         });
 
         await manager.save(mapping);

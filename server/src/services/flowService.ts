@@ -1,9 +1,13 @@
 import { AppDataSource } from "../data-source";
 import { Business } from "../entity/Business";
-import { BusinessFlowMapping } from "../entity/BusinessFlowMapping";
+import { BusinessPathEntity } from "../entity/BusinessPath";
 import { Flow } from "../entity/Flow";
-import { Task, TaskScheduler } from "../utils/task_scheduling";
 import * as ScrapingService from "./scrapingService";
+import { FlowExecutor } from "../utils/FlowExecutor";
+import { FlowStatus } from "../../../shared/models";
+
+// In-memory registry of FlowExecutors, keyed by flow id.
+const FlowExecutors: Record<string, FlowExecutor> = {};
 
 enum Priority {
   Initial = 1,
@@ -11,54 +15,77 @@ enum Priority {
   OutreachApproved = 3,
 }
 
-export const getFlows = async () => {
+/**
+ * Returns all existing flows.
+ */
+export const getFlows = async (): Promise<Flow[]> => {
   const flowRepo = AppDataSource.getRepository(Flow);
   return await flowRepo.find();
 };
 
+/**
+ * Creates a new flow, kicks off scraping to collect associated businesses,
+ * and then initializes a FlowExecutor to load and process all paths for the flow.
+ */
 export const createFlow = async (
   name: string,
   filters: any,
   outreachTemplate: any
-) => {
+): Promise<Flow> => {
   const flowRepo = AppDataSource.getRepository(Flow);
 
   const newFlow = flowRepo.create({
     name,
     filters,
     outreachTemplate,
+    status: FlowStatus.InProgress,
   });
 
-  const id = (await flowRepo.save(newFlow)).id;
-  console.log("Created new search flow:", newFlow, id);
+  const savedFlow = await flowRepo.save(newFlow);
 
-  await ScrapingService.scrapeBusinesses(id);
-  console.log("ScrapingService done");
+  // Scrape and persist businesses for this flow.
+  await ScrapingService.scrapeBusinesses(savedFlow.id);
 
-  // Next, trigger the processing of the first job.
-  // First let us not concider the orchestration of the jobs
-  // Just process the first business fully in one swoop.
-  const taskScheduler = new TaskScheduler();
+  // Create and initialize a FlowExecutor for this flow.
+  const executor = new FlowExecutor();
+  await executor.load(savedFlow.id);
+  executor.start();
 
-  // Create tasks for each business in the flow.
-  const businessFlowMappings = await AppDataSource.getRepository(
-    BusinessFlowMapping
-  ).find({
-    where: { flow: { id } },
-    relations: ["business"],
+  // Save the FlowExecutor instance in our registry for later reference.
+  FlowExecutors[savedFlow.id.toString()] = executor;
+
+  return savedFlow;
+};
+
+/**
+ * Approves a pending stage (either "report" or "outreach") for a given path.
+ * The function first finds the corresponding BusinessPath (and its flow),
+ * then relays the approval to the corresponding FlowExecutor instance.
+ */
+export const approve = async (
+  pathId: string,
+  approvalType: "report" | "outreach"
+): Promise<void> => {
+  // Look up the BusinessPath record by id.
+  const mappingRepo = AppDataSource.getRepository(BusinessPathEntity);
+  const mapping = await mappingRepo.findOne({
+    where: { id: Number(pathId) },
+    relations: ["flow"],
   });
 
-  for (const mapping of businessFlowMappings) {
-    const business = mapping.business;
-
-    const task = new Task(mapping.id.toString(), Priority.Initial, async () => {
-      console.log(`Processing Business ${business.id}`);
-      // Do the processing here
-      console.log(`Business ${business.id} processed!`);
-    });
-
-    taskScheduler.addTask(task);
+  if (!mapping) {
+    throw new Error(`No BusinessPath found with id ${pathId}`);
   }
 
-  return newFlow;
+  // Determine the flow id from the mapping.
+  const flowId = mapping.flow.id.toString();
+  const executor = FlowExecutors[flowId];
+  if (!executor) {
+    throw new Error(`FlowExecutor not found for flow id ${flowId}`);
+  }
+
+  // Relay the approval to the FlowExecutor, which updates the DB and schedules
+  // a new task to continue processing the path.
+  await executor.approve(pathId, approvalType);
+  console.log(`Approved ${approvalType} for path ${pathId} (flow ${flowId})`);
 };
