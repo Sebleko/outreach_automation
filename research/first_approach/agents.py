@@ -127,6 +127,7 @@ async def query_generation_agent(state: ProspectingAgentState) -> Dict[str, Any]
             "scratchpad": s.get("scratchpad", ""),
             "research_question": question
         }
+        print("QG: Calling llm with, Input data", input_data)
         response, tokens_used = await call_llm(query_generation_agent_prompt, input_data, QueryGenerationOutput)
         return ({
             "research_question": question,

@@ -80,9 +80,9 @@ class ProspectingAgentState(TypedDict, total=False):
     max_rounds: NotRequired[int]
     total_tokens_used:  Annotated[int, add]
     max_tokens: NotRequired[int]
-    num_google_searches: NotRequired[int]
+    num_google_searches: Annotated[int, add]
     max_google_searches: NotRequired[int]
-    num_page_fetches: NotRequired[int]
+    num_page_fetches: Annotated[int, add]
     max_page_fetches: NotRequired[int]
 
 

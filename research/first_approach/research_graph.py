@@ -69,9 +69,12 @@ def create_research_graph():
         Else we need to continue with query generation.
         """
         research_questions = state.get("research_questions")
+        print("Research questions:", research_questions)
         if research_questions and len(research_questions) > 0:
+            print("Continuing with query generation")
             return "query_generation"
         else:
+            print("No more research questions, proceeding to finalization")
             return "finalization"
 
     # Planner -> ready_check -> either query_generation or finalization
