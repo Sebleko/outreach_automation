@@ -44,7 +44,8 @@ export const getBusinessPaths = async (req: Request, res: Response) => {
       },
       relations: ["business"], // Eager-load the linked Business
     });
-
+    console.log("Found", mappings.length, "business paths for flow", flowId);
+    console.log("First path:", mappings[0]);
     // 2. Extract just the Business entities from those mappings
     const businessFlows = mappings.map(
       (m) =>
@@ -81,6 +82,34 @@ export const getFlowById = async (req: Request, res: Response) => {
       res.status(404).json({ error: "Search flow not found" });
     }
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const approvePath = async (req: Request, res: Response) => {
+  try {
+    const { pathId: id, approvalType } = req.params;
+    console.log("Approving path", id, "with type", approvalType);
+
+    if (approvalType !== "report" && approvalType !== "outreach") {
+      res.status(400).json({ error: "Invalid approval type" });
+      return;
+    }
+
+    const pathRepo = AppDataSource.getRepository(BusinessPathEntity);
+    const path = await pathRepo.findOneBy({ id: Number(id) });
+
+    console.log("Found path:", path);
+    if (!path) {
+      res.status(404).json({ error: "Business path not found" });
+      return;
+    }
+
+    await FlowService.approve(id, approvalType);
+
+    res.json(path);
+  } catch (error) {
+    console.warn("approvePath error:", error);
     res.status(500).json({ error: error.message });
   }
 };

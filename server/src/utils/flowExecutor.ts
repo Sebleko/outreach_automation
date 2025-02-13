@@ -112,9 +112,6 @@ export class FlowExecutor {
     this.isPaused = true;
     await this.scheduler.pause();
     console.log("[FlowExecutor] Paused execution.");
-
-    // Optionally mark any in-progress paths as Paused
-    await this.markUnfinishedPathsAsPaused();
   }
 
   /**
@@ -133,14 +130,7 @@ export class FlowExecutor {
     // Find the path in memory (faster) or load from DB
     let path = this.paths.find((p) => String(p.id) === pathId);
     if (!path) {
-      // Attempt to load from DB if not found in memory
-      const repo = AppDataSource.getRepository(BusinessPathEntity);
-      path = await repo.findOneBy({ id: Number(pathId) });
-      if (!path) {
-        throw new Error(`Path with ID ${pathId} not found.`);
-      }
-      // Optional: add it to our in-memory array for future reference
-      this.paths.push(path);
+      throw new Error(`Path with ID ${pathId} not found.`);
     }
 
     // Check the current status and update accordingly
@@ -182,16 +172,12 @@ export class FlowExecutor {
    * Core logic to handle a single path's workflow stage transitions.
    */
   private async processPath(path: BusinessPathEntity): Promise<void> {
-    console.log(
-      `[FlowExecutor] Processing path ${path.id} - current status: ${path.status}`
-    );
-
     switch (path.status) {
       case PathStatus.Pending: {
         // Move to "ExplorationInProgress"
         path.status = PathStatus.ExplorationInProgress;
         await this.savePath(path);
-        await this.fakeAsyncDelay(1000);
+        await this.fakeAsyncDelay(3000 + 100000 * Math.random());
 
         // Then automatically assume we have a "report" that needs approval
         path.status = PathStatus.AwaitingReportApproval;
@@ -203,7 +189,7 @@ export class FlowExecutor {
         // Move to "OutreachGenerationInProgress"
         path.status = PathStatus.OutreachGenerationInProgress;
         await this.savePath(path);
-        await this.fakeAsyncDelay(1000);
+        await this.fakeAsyncDelay(3000 + Math.random() * 2000);
 
         // Then we require outreach approval
         path.status = PathStatus.AwaitingOutreachApproval;
@@ -236,10 +222,6 @@ export class FlowExecutor {
         // No changes; we end the task here
         break;
     }
-
-    console.log(
-      `[FlowExecutor] Path ${path.id} ended with status: ${path.status}`
-    );
   }
 
   /**
@@ -263,22 +245,6 @@ export class FlowExecutor {
    */
   private async savePath(path: BusinessPathEntity): Promise<void> {
     await AppDataSource.getRepository(BusinessPathEntity).save(path);
-  }
-
-  /**
-   * Mark any in-progress paths as Paused in the database.
-   */
-  private async markUnfinishedPathsAsPaused(): Promise<void> {
-    const unfinished = this.paths.filter(
-      (p) =>
-        p.status !== PathStatus.Done &&
-        p.status !== PathStatus.Failed &&
-        p.status !== PathStatus.Paused
-    );
-    for (const path of unfinished) {
-      path.status = PathStatus.Paused;
-      await this.savePath(path);
-    }
   }
 
   /**

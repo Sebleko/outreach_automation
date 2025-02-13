@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { BusinessPath } from "../../../shared/models";
+import { BusinessPath, PathStatus } from "../../../shared/models";
 
 const FlowDashboard: React.FC = () => {
   const { flowId } = useParams();
   const [flowName, setFlowName] = useState("");
-  const [businesses, setBusinesses] = useState<BusinessPath[]>([]);
+  const [businessPaths, setBusinessPaths] = useState<BusinessPath[]>([]);
 
   useEffect(() => {
     fetchFlowDetails();
@@ -25,17 +25,35 @@ const FlowDashboard: React.FC = () => {
     const res = await fetch(`/api/flows/${flowId}/businesses`);
     const data = await res.json();
     console.log("Businesses in flow", data);
-    setBusinesses(data);
+    setBusinessPaths(data);
   };
 
-  const approvePlan = (mappingId: number) => {
+  const approveReport = async (mappingId: number) => {
     // Some API call to mark status as 'outreach_ready'
-    console.log("Approving plan for mapping", mappingId);
+    if (!flowId) throw new Error("Flow ID not found.");
+
+    const res = await fetch(`/api/flows/approve/${mappingId}/report`, {
+      method: "PUT",
+    });
+
+    if (res.ok) {
+      console.log("Report phase approved.");
+    } else {
+      console.error("Failed to approve report phase.");
+    }
   };
 
-  const approveEmail = (mappingId: number) => {
-    // Some API call to send or queue the email
-    console.log("Approving email for mapping", mappingId);
+  const approveEmail = async (mappingId: number) => {
+    if (!flowId) throw new Error("Flow ID not found.");
+    const res = await fetch(`/api/flows/approve/${mappingId}/outreach`, {
+      method: "PUT",
+    });
+
+    if (res.ok) {
+      console.log("Outreach phase approved.");
+    } else {
+      console.error("Failed to approve outreach phase.");
+    }
   };
 
   return (
@@ -52,31 +70,31 @@ const FlowDashboard: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          {businesses.map((bf) => (
-            <tr key={bf.id}>
-              <td className="p-2">{bf.business.name}</td>
-              <td className="p-2">{bf.business.website || "N/A"}</td>
-              <td className="p-2">{bf.status}</td>
-              <td className="p-2">{bf.last_contacted || "Never"}</td>
+          {businessPaths.map((bp) => (
+            <tr key={bp.id}>
+              <td className="p-2">{bp.business.name}</td>
+              <td className="p-2">{bp.business.website || "N/A"}</td>
+              <td className="p-2">{bp.status}</td>
+              <td className="p-2">{bp.last_contacted || "Never"}</td>
               <td className="p-2">
                 <Link
-                  to={`/flows/${flowId}/${bf.id}`}
+                  to={`/flows/${flowId}/${bp.business.id}`}
                   className="bg-blue-500 text-white px-2 py-1 mr-2 rounded"
                 >
                   View
                 </Link>
-                {bf.status === "profiled" && (
+                {bp.status === PathStatus.AwaitingReportApproval && (
                   <button
                     className="bg-green-600 text-white px-2 py-1 rounded mr-2"
-                    onClick={() => approvePlan(bf.id)}
+                    onClick={() => approveReport(bp.id)}
                   >
-                    Approve Plan
+                    Approve Report
                   </button>
                 )}
-                {bf.status === "outreach_ready" && (
+                {bp.status === PathStatus.AwaitingOutreachApproval && (
                   <button
                     className="bg-blue-600 text-white px-2 py-1 rounded"
-                    onClick={() => approveEmail(bf.id)}
+                    onClick={() => approveEmail(bp.id)}
                   >
                     Approve Email
                   </button>

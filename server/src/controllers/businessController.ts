@@ -31,6 +31,7 @@ export const getAllBusinesses = async (req: Request, res: Response) => {
 
 export const getBusinessById = async (req: Request, res: Response) => {
   try {
+    console.log("GET /api/businesses/:id", req.params.id);
     const businessRepo = AppDataSource.getRepository(Business);
     const business = await businessRepo.findOneBy({
       id: Number(req.params.id),

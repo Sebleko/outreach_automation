@@ -25,8 +25,11 @@ const BusinessDetailPage: React.FC = () => {
 
   const fetchBusiness = async () => {
     if (!businessId) return;
+    console.log("Fetching business detail for ID:", businessId);
     const res = await fetch(`/api/businesses/${businessId}`);
+    console.log("Response status:", res.status);
     const data = await res.json();
+    console.log("Business data:", data);
     setBusiness(data);
     // Optionally, load generated content from your API
     // setReport(data.generatedReport);
@@ -41,12 +44,19 @@ const BusinessDetailPage: React.FC = () => {
     setReportPrompt("");
   };
 
-  const approveReport = () => {
-    // Approve the report phase and lock it down.
-    setReportApproved(true);
-    console.log("Report phase approved. Proceeding to the Email stage...");
-    // Automatically switch to the Email tab.
-    setActiveTab("email");
+  const approveReport = async () => {
+    if (!flowId) throw new Error("Flow ID not found.");
+
+    const res = await fetch(`/api/flows/approve/${-12}/report`, {
+      method: "PUT",
+    });
+
+    if (res.ok) {
+      setReportApproved(true);
+      console.log("Report phase approved. Proceeding to email phase...");
+    } else {
+      console.error("Failed to approve report phase.");
+    }
   };
 
   // --- Handlers for the Email tab ---

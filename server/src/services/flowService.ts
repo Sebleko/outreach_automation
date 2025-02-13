@@ -3,7 +3,7 @@ import { Business } from "../entity/Business";
 import { BusinessPathEntity } from "../entity/BusinessPath";
 import { Flow } from "../entity/Flow";
 import * as ScrapingService from "./scrapingService";
-import { FlowExecutor } from "../utils/FlowExecutor";
+import { FlowExecutor } from "../utils/flowExecutor";
 import { FlowStatus } from "../../../shared/models";
 
 // In-memory registry of FlowExecutors, keyed by flow id.
@@ -14,6 +14,30 @@ enum Priority {
   ReportApproved = 2,
   OutreachApproved = 3,
 }
+
+/**
+ * Creates, starts, and stores a new FlowExecutor instance for a given flow.
+ * @param flowId
+ */
+const startFlowExecutor = async (flowId: number): Promise<void> => {
+  const executor = new FlowExecutor();
+  await executor.load(flowId);
+  executor.start();
+  FlowExecutors[flowId] = executor;
+};
+
+/**
+ * Initializes the flow service by loading all existing flows and resuming their execution.
+ */
+export const start = async (): Promise<void> => {
+  const flowRepo = AppDataSource.getRepository(Flow);
+  const flows = await flowRepo.find({
+    where: { status: FlowStatus.InProgress },
+  });
+  for (const flow of flows) {
+    await startFlowExecutor(flow.id);
+  }
+};
 
 /**
  * Returns all existing flows.
@@ -46,13 +70,8 @@ export const createFlow = async (
   // Scrape and persist businesses for this flow.
   await ScrapingService.scrapeBusinesses(savedFlow.id);
 
-  // Create and initialize a FlowExecutor for this flow.
-  const executor = new FlowExecutor();
-  await executor.load(savedFlow.id);
-  executor.start();
-
-  // Save the FlowExecutor instance in our registry for later reference.
-  FlowExecutors[savedFlow.id.toString()] = executor;
+  // Start a new FlowExecutor for this flow.
+  await startFlowExecutor(savedFlow.id);
 
   return savedFlow;
 };

@@ -12,9 +12,9 @@ export class Task {
   }
 
   async process(): Promise<void> {
-    console.log(`Processing Task ${this.id} - Priority ${this.priority}`);
+    //console.log(`Processing Task ${this.id} - Priority ${this.priority}`);
     await this.work();
-    console.log(`Task ${this.id} completed!`);
+    //console.log(`Task ${this.id} completed!`);
   }
 }
 

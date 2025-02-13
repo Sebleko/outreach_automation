@@ -104,19 +104,31 @@ export async function scrapeBusinesses(
     await AppDataSource.transaction(async (manager) => {
       for (const bizData of scrapedData) {
         //console.log("Inserting business:", bizData);
-        // Create a new Business entity
-        const business = manager.create(Business, {
-          name: bizData.name,
-          category: bizData.category,
-          address: bizData.address,
-          phone: bizData.phone,
-          website: bizData.website,
-          email: bizData.email,
-          rating: bizData.rating,
-          review_count: bizData.review_count,
+        // Check that the business does not already exist. Check if websites match. If website is undefined in both fall back to address, then name.
+        let business: Business | null = await manager.findOne(Business, {
+          where: {
+            website: bizData.website,
+            address: bizData.address,
+            name: bizData.name,
+          },
         });
+        // If the business does not exist, create it.
+        if (!business) {
+          // Create a new Business entity
+          const b = manager.create(Business, {
+            name: bizData.name,
+            category: bizData.category,
+            address: bizData.address,
+            phone: bizData.phone,
+            website: bizData.website,
+            email: bizData.email,
+            rating: bizData.rating,
+            review_count: bizData.review_count,
+          });
 
-        await manager.save(business);
+          business = await manager.save(b);
+        }
+        console.log("Scraped Business:", business);
 
         // Create the mapping between Business and Flow
         const mapping = manager.create(BusinessPathEntity, {
@@ -124,6 +136,7 @@ export async function scrapeBusinesses(
           flow, // or "Flow: flow" if your relation is named "Flow" in the entity
           status: PathStatus.Pending,
         });
+        console.log("Mapping:", mapping);
 
         await manager.save(mapping);
       }

@@ -4,6 +4,7 @@ import flowRouter from "./routes/flowRouter";
 import businessRouter from "./routes/businessRouter";
 import { config } from "dotenv";
 import { AppDataSource } from "./data-source";
+import { start as startFlowService } from "./services/flowService";
 
 config(); // Load .env if necessary
 
@@ -36,6 +37,7 @@ AppDataSource.initialize()
       console.log(`Server running on port ${port}`);
     });
   })
+  .then(startFlowService)
   .catch((err) => {
     console.error(err);
   });

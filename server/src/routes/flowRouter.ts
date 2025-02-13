@@ -32,6 +32,12 @@ router.get("/:id/businesses", FlowController.getBusinessPaths);
 router.post("/", FlowController.createFlow);
 
 /**
+ * PUT /api/flows/approve/:pathId/:approvalType
+ * Approve a report or outreach for a specific path
+ */
+router.put("/approve/:pathId/:approvalType", FlowController.approvePath);
+
+/**
  * (OPTIONAL) Additional routes, e.g.:
  *  - /api/flows/:id/businesses  (list businesses in that flow)
  *  - /api/flows/:id/scrape      (trigger scraping job)
