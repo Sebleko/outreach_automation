@@ -2,9 +2,11 @@ import express from "express";
 import cors from "cors";
 import flowRouter from "./routes/flowRouter";
 import businessRouter from "./routes/businessRouter";
+import callbackRouter from "./routes/callbackRouter";
 import { config } from "dotenv";
 import { AppDataSource } from "./data-source";
 import { start as startFlowService } from "./services/flowService";
+import singleOutreachRouter from "./routes/singleOutreachRouter";
 
 config(); // Load .env if necessary
 
@@ -17,6 +19,8 @@ app.use(express.json());
 // Register routes
 app.use("/api/flows", flowRouter);
 app.use("/api/businesses", businessRouter);
+app.use("/api/single-outreach", singleOutreachRouter);
+app.use("/task_completed", callbackRouter);
 
 // Example global error handler
 app.use((err, req, res, next) => {
